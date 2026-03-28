@@ -1,43 +1,95 @@
-const form = document.getElementById('planForm');
-const submitBtn = document.getElementById('submitBtn');
-const resultBox = document.getElementById('result');
-const incidentPanel = document.getElementById('incidentPanel');
-const contingencyBox = document.getElementById('contingency');
+// ── State ──
+let conversationHistory = [];
+let travelInfo = {};
+let isStreaming = false;
 
-// Stores the last generated plan text and form inputs for incident calls
-let currentPlanText = '';
-let currentFormData = {};
+// ── DOM ──
+const travelForm  = document.getElementById('travelForm');
+const startBtn    = document.getElementById('startBtn');
+const messagesEl  = document.getElementById('messages');
+const userInput   = document.getElementById('userInput');
+const sendBtn     = document.getElementById('sendBtn');
 
-// --- Plan generation ---
+// ── Auto-resize textarea ──
+userInput.addEventListener('input', () => {
+  userInput.style.height = 'auto';
+  userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
+});
 
-form.addEventListener('submit', async (e) => {
+// ── Send on Enter (Shift+Enter = newline) ──
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!sendBtn.disabled) handleSend();
+  }
+});
+
+// ── Start planning ──
+travelForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  currentFormData = {
+  travelInfo = {
     destination: document.getElementById('destination').value.trim(),
-    days: parseInt(document.getElementById('days').value),
-    people: parseInt(document.getElementById('people').value),
+    days:        parseInt(document.getElementById('days').value),
+    people:      parseInt(document.getElementById('people').value),
     preferences: document.getElementById('preferences').value.trim()
   };
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = '規劃中…';
-  incidentPanel.classList.add('hidden');
-  contingencyBox.classList.add('hidden');
-  contingencyBox.innerHTML = '';
-  currentPlanText = '';
+  // Reset conversation
+  conversationHistory = [];
+  messagesEl.innerHTML = '';
 
-  resultBox.innerHTML = `
-    <div class="loading">
-      <div class="spinner"></div>
-      <span>AI 正在規劃行程，請稍候…</span>
-    </div>`;
+  const initMessage =
+    `請幫我規劃以下旅遊行程：\n` +
+    `目的地：${travelInfo.destination}\n` +
+    `旅遊天數：${travelInfo.days} 天\n` +
+    `人數：${travelInfo.people} 人\n` +
+    `偏好與限制：${travelInfo.preferences || '無特別限制'}\n\n` +
+    `請提供完整的逐日行程建議。`;
+
+  await sendMessage(initMessage);
+
+  userInput.disabled = false;
+  sendBtn.disabled = false;
+  userInput.focus();
+});
+
+// ── Manual send ──
+sendBtn.addEventListener('click', handleSend);
+
+// ── Incident quick buttons ──
+document.querySelectorAll('.incident-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (isStreaming || conversationHistory.length === 0) return;
+    userInput.value = btn.dataset.msg;
+    userInput.style.height = 'auto';
+    handleSend();
+  });
+});
+
+function handleSend() {
+  const text = userInput.value.trim();
+  if (!text || isStreaming) return;
+  userInput.value = '';
+  userInput.style.height = 'auto';
+  sendMessage(text);
+}
+
+// ── Core: send message → stream response ──
+async function sendMessage(text) {
+  isStreaming = true;
+  setControlsDisabled(true);
+
+  conversationHistory.push({ role: 'user', content: text });
+  appendMessage('user', text);
+
+  const aiBubble = appendMessage('assistant', null); // null = show loading dots
 
   try {
-    const res = await fetch('/api/plan', {
+    const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentFormData)
+      body: JSON.stringify({ messages: conversationHistory, travelInfo })
     });
 
     if (!res.ok) {
@@ -45,90 +97,62 @@ form.addEventListener('submit', async (e) => {
       throw new Error(err.error || '伺服器錯誤');
     }
 
-    currentPlanText = await streamToElement(res, resultBox);
-    incidentPanel.classList.remove('hidden');
+    const fullText = await streamToElement(res, aiBubble);
+    conversationHistory.push({ role: 'assistant', content: fullText });
 
   } catch (err) {
-    resultBox.innerHTML = `<div class="error-msg">錯誤：${escapeHtml(err.message)}</div>`;
+    aiBubble.innerHTML = `<div class="error-msg">錯誤：${escapeHtml(err.message)}</div>`;
   } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = '產生行程建議';
+    isStreaming = false;
+    setControlsDisabled(false);
+    if (conversationHistory.length > 0) userInput.focus();
   }
-});
+}
 
-// --- Incident buttons ---
+// ── Append a message bubble, return the bubble element ──
+function appendMessage(role, text) {
+  const welcome = messagesEl.querySelector('.welcome-msg');
+  if (welcome) welcome.remove();
 
-document.querySelectorAll('.incident-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const incident = btn.dataset.incident;
-    const labels = { rain: '突發大雨', closed: '景點臨時關閉', delay: '交通延誤' };
+  const row    = document.createElement('div');
+  row.className = `msg ${role}`;
 
-    document.querySelectorAll('.incident-btn').forEach(b => b.disabled = true);
-    btn.textContent = '應變中…';
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = role === 'user' ? '你' : 'AI';
 
-    contingencyBox.classList.remove('hidden');
-    contingencyBox.innerHTML = `
-      <div class="contingency-header">
-        <span class="tag-incident">${{ rain: '⛈', closed: '🚫', delay: '⏱' }[incident]} ${labels[incident]}</span>
-        <span class="contingency-label">應變備案</span>
-      </div>
-      <div class="loading">
-        <div class="spinner"></div>
-        <span>AI 正在生成應變備案…</span>
-      </div>`;
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
 
-    // Scroll to contingency
-    contingencyBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (text === null) {
+    bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+  } else if (role === 'user') {
+    bubble.textContent = text;
+  } else {
+    bubble.innerHTML = renderMarkdown(text);
+  }
 
-    try {
-      const res = await fetch('/api/incident', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...currentFormData, originalPlan: currentPlanText, incident })
-      });
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+  scrollToBottom();
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '伺服器錯誤');
-      }
+  return bubble;
+}
 
-      // Keep header, stream content below it
-      const header = contingencyBox.querySelector('.contingency-header');
-      const contentTarget = document.createElement('div');
-      contingencyBox.innerHTML = '';
-      contingencyBox.appendChild(header);
-      contingencyBox.appendChild(contentTarget);
-
-      await streamToElement(res, contentTarget);
-
-    } catch (err) {
-      contingencyBox.innerHTML += `<div class="error-msg">錯誤：${escapeHtml(err.message)}</div>`;
-    } finally {
-      const incidentLabels = { rain: '⛈ 突發大雨', closed: '🚫 景點臨時關閉', delay: '⏱ 交通延誤' };
-      document.querySelectorAll('.incident-btn').forEach(b => {
-        b.disabled = false;
-        b.textContent = incidentLabels[b.dataset.incident];
-      });
-    }
-  });
-});
-
-// --- Shared streaming helper ---
-
-async function streamToElement(res, container) {
-  const reader = res.body.getReader();
+// ── Stream SSE into a bubble element, return full text ──
+async function streamToElement(res, bubble) {
+  const reader  = res.body.getReader();
   const decoder = new TextDecoder();
-  let fullText = '';
-  let contentDiv = null;
+  let fullText    = '';
+  let initialized = false;
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
     const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
-
-    for (const line of lines) {
+    for (const line of chunk.split('\n')) {
       if (!line.startsWith('data: ')) continue;
       const data = line.slice(6);
       if (data === '[DONE]') break;
@@ -137,37 +161,41 @@ async function streamToElement(res, container) {
         const parsed = JSON.parse(data);
         if (parsed.error) throw new Error(parsed.error);
         if (parsed.text) {
+          if (!initialized) { bubble.innerHTML = ''; initialized = true; }
           fullText += parsed.text;
-          if (!contentDiv) {
-            container.innerHTML = '';
-            contentDiv = document.createElement('div');
-            contentDiv.className = 'result-content';
-            container.appendChild(contentDiv);
-          }
-          contentDiv.innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
+          bubble.innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
+          scrollToBottom();
         }
-      } catch (parseErr) {
-        if (parseErr.message !== 'Unexpected end of JSON input') throw parseErr;
+      } catch (e) {
+        if (e.message !== 'Unexpected end of JSON input') throw e;
       }
     }
   }
 
-  if (contentDiv) {
-    contentDiv.innerHTML = renderMarkdown(fullText);
-  }
-
+  if (initialized) bubble.innerHTML = renderMarkdown(fullText);
   return fullText;
 }
 
-// --- Helpers ---
+// ── Enable / disable controls while streaming ──
+function setControlsDisabled(disabled) {
+  startBtn.disabled = disabled;
+  sendBtn.disabled  = disabled;
+  userInput.disabled = disabled;
+  document.querySelectorAll('.incident-btn').forEach(b => b.disabled = disabled);
+}
 
+function scrollToBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ── Minimal Markdown renderer ──
 function renderMarkdown(text) {
   return text
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h3>$1</h3>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     .split('\n\n')
     .map(block => {
