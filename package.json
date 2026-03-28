@@ -1,0 +1,17 @@
+{
+  "name": "navigator-demo",
+  "version": "1.0.0",
+  "description": "旅遊行程應變系統 Navigator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
+    "@google/generative-ai": "^0.24.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "groq-sdk": "^1.1.2"
+  }
+}

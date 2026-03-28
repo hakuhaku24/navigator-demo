@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Navigator — 旅遊行程應變系統</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="logo">&#9708; Navigator</div>
+    <p class="tagline">旅遊行程應變系統</p>
+  </header>
+
+  <main>
+    <section class="form-panel">
+      <h2>行程規劃</h2>
+      <form id="planForm">
+        <div class="field">
+          <label for="destination">目的地</label>
+          <input type="text" id="destination" placeholder="例：京都、峇里島、台南" required>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="days">旅遊天數</label>
+            <input type="number" id="days" min="1" max="30" placeholder="天" required>
+          </div>
+          <div class="field">
+            <label for="people">人數</label>
+            <input type="number" id="people" min="1" max="100" value="5" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="preferences">偏好與限制</label>
+          <input type="text" id="preferences" placeholder="例：不吃辣、偏好室內、省錢、有老人">
+        </div>
+
+        <button type="submit" id="submitBtn">產生行程建議</button>
+      </form>
+    </section>
+
+    <section class="result-panel">
+      <h2>行程建議</h2>
+      <div id="result" class="result-box">
+        <p class="placeholder">填寫左側表單後，AI 將在此顯示行程建議。</p>
+      </div>
+
+      <div id="incidentPanel" class="incident-panel hidden">
+        <div class="incident-header">
+          <span class="incident-title">模擬突發狀況</span>
+          <span class="incident-note">正式版將串接天氣 API 自動觸發，demo 版以按鈕模擬</span>
+        </div>
+        <div class="incident-buttons">
+          <button class="incident-btn" data-incident="rain">⛈ 突發大雨</button>
+          <button class="incident-btn" data-incident="closed">🚫 景點臨時關閉</button>
+          <button class="incident-btn" data-incident="delay">⏱ 交通延誤</button>
+        </div>
+      </div>
+
+      <div id="contingency" class="contingency-box hidden"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
