@@ -144,8 +144,22 @@ function appendMessage(role, text) {
 async function streamToElement(res, bubble) {
   const reader  = res.body.getReader();
   const decoder = new TextDecoder();
-  let fullText    = '';
-  let initialized = false;
+  let fullText     = '';
+  let textStarted  = false;
+  let toolHtml     = '';   // MCP 工具呼叫 / 結果區塊
+
+  function repaint() {
+    if (toolHtml && fullText) {
+      bubble.innerHTML = toolHtml +
+        '<hr class="tool-divider">' +
+        renderMarkdown(fullText) + '<span class="cursor"></span>';
+    } else if (toolHtml) {
+      bubble.innerHTML = toolHtml;
+    } else {
+      bubble.innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
+    }
+    scrollToBottom();
+  }
 
   while (true) {
     const { done, value } = await reader.read();
@@ -160,11 +174,24 @@ async function streamToElement(res, bubble) {
       try {
         const parsed = JSON.parse(data);
         if (parsed.error) throw new Error(parsed.error);
+
+        // MCP Client 正在呼叫工具
+        if (parsed.tool_call) {
+          toolHtml = renderToolCalling(parsed.tool_call);
+          repaint();
+        }
+
+        // MCP Server 回傳工具結果
+        if (parsed.tool_result) {
+          toolHtml = renderToolResult(parsed.tool_result);
+          repaint();
+        }
+
+        // AI 最終文字回答
         if (parsed.text) {
-          if (!initialized) { bubble.innerHTML = ''; initialized = true; }
+          textStarted = true;
           fullText += parsed.text;
-          bubble.innerHTML = renderMarkdown(fullText) + '<span class="cursor"></span>';
-          scrollToBottom();
+          repaint();
         }
       } catch (e) {
         if (e.message !== 'Unexpected end of JSON input') throw e;
@@ -172,8 +199,51 @@ async function streamToElement(res, bubble) {
     }
   }
 
-  if (initialized) bubble.innerHTML = renderMarkdown(fullText);
+  // 移除游標、最終渲染
+  if (toolHtml && fullText) {
+    bubble.innerHTML = toolHtml + '<hr class="tool-divider">' + renderMarkdown(fullText);
+  } else if (fullText) {
+    bubble.innerHTML = renderMarkdown(fullText);
+  } else if (!toolHtml) {
+    bubble.innerHTML = '';
+  }
+
   return fullText;
+}
+
+// ── MCP 工具呼叫中：顯示 Loading 狀態 ──
+function renderToolCalling(toolCall) {
+  const loc  = escapeHtml(toolCall.arguments?.location || '');
+  const date = escapeHtml(toolCall.arguments?.date || '今天');
+  return `<div class="mcp-tool-calling">
+    <span class="mcp-spinner"></span>
+    <span>正在透過 <strong>MCP</strong> 查詢 <strong>${loc}</strong> <strong>${date}</strong> 天氣資料…</span>
+  </div>`;
+}
+
+// ── MCP 工具結果：顯示天氣卡片 ──
+function renderToolResult(r) {
+  const safe = s => escapeHtml(String(s ?? '—'));
+  const dateLabel = r.forecast_date
+    ? `<span class="mcp-date">${safe(r.forecast_date)}</span>`
+    : '';
+  return `<div class="mcp-tool-result">
+    <div class="mcp-result-header">
+      <span class="mcp-icon">📡</span>
+      <span class="mcp-title">MCP 工具回傳</span>
+      ${dateLabel}
+      <span class="mcp-source">${safe(r.source)}</span>
+    </div>
+    <div class="weather-grid">
+      <div class="weather-cell"><span class="wl">地點</span><span>${safe(r.location)}</span></div>
+      <div class="weather-cell"><span class="wl">氣溫</span><span>${safe(r.temperature)}</span></div>
+      <div class="weather-cell"><span class="wl">天氣</span><span>${safe(r.condition)}</span></div>
+      <div class="weather-cell"><span class="wl">濕度</span><span>${safe(r.humidity)}</span></div>
+      <div class="weather-cell"><span class="wl">降雨機率</span><span>${safe(r.precipitation)}</span></div>
+      <div class="weather-cell weather-cell--wide"><span class="wl">預報</span><span>${safe(r.forecast)}</span></div>
+    </div>
+    ${r.travel_advice ? `<div class="weather-advice">⚠ ${escapeHtml(r.travel_advice)}</div>` : ''}
+  </div>`;
 }
 
 // ── Enable / disable controls while streaming ──

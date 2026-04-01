@@ -366,6 +366,111 @@ input:focus, textarea:focus {
   font-size: 0.875rem;
 }
 
+/* ── MCP Tool: 呼叫中 ── */
+.mcp-tool-calling {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #1d4ed8;
+}
+
+.mcp-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #93c5fd;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MCP Tool: 結果卡片 ── */
+.mcp-tool-result {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+}
+
+.mcp-result-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.mcp-icon { font-size: 1rem; }
+.mcp-title { font-size: 0.8rem; }
+
+.mcp-date {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 1px 8px;
+  border-radius: 20px;
+}
+
+.mcp-source {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #6b7280;
+  background: #e5e7eb;
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+
+.weather-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 12px;
+}
+
+.weather-cell {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  color: #111827;
+}
+
+.weather-cell--wide { grid-column: 1 / -1; }
+
+.wl {
+  font-size: 0.72rem;
+  color: #6b7280;
+  white-space: nowrap;
+  min-width: 52px;
+}
+
+.weather-advice {
+  margin-top: 7px;
+  padding: 5px 8px;
+  background: #fefce8;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #92400e;
+}
+
+/* ── 工具結果 + AI 文字之間的分隔線 ── */
+.tool-divider {
+  border: none;
+  border-top: 1px dashed #d1d5db;
+  margin: 10px 0;
+}
+
 @media (max-width: 680px) {
   .sidebar { display: none; }
   .incident-bar-note { display: none; }
